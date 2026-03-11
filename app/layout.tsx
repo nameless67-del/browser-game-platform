@@ -1,3 +1,4 @@
+import './globals.css' // これを追加
 export default function RootLayout({
   children,
 }: {
