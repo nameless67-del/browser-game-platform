@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* ここに設定を書きますが、今は空（デフォルト）で大丈夫です */
+  // Tailwind v4 を Next.js で有効化するための設定
+  experimental: {
+    optimizePackageImports: ["tailwindcss"],
+  },
 };
 
 export default nextConfig;
