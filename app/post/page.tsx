@@ -8,7 +8,8 @@ import Link from 'next/link';
 export default function PostPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'folder'>('code');
+  // デフォルトを 'folder' に変更 
+  const [activeTab, setActiveTab] = useState<'folder' | 'code'>('folder');
   
   const [formData, setFormData] = useState({
     title: '',
@@ -16,11 +17,10 @@ export default function PostPage() {
     author: '',
     play_time_avg: 0,
     thumbnail_url: '',
-    game_code: '', // 生成AIコード直貼り用
+    game_code: '', 
     genre: 'Action',
   });
 
-  // プレビュー用のURL（Blob）を生成
   const [previewUrl, setPreviewUrl] = useState<string>('');
 
   useEffect(() => {
@@ -37,17 +37,16 @@ export default function PostPage() {
     setLoading(true);
 
     try {
-      // gamesテーブルへの挿入（定義書に基づく構成 ）
       const { error } = await supabase
         .from('games')
         .insert([{
           ...formData,
-          is_ai_generated: true, // デフォルトでAI生成フラグをオン 
-          revenue_weight: 1.0     // 収益分配の初期重み 
+          is_ai_generated: activeTab === 'code',
+          revenue_weight: 1.0     
         }]);
 
       if (error) throw error;
-      alert('30秒投稿完了！世界へ公開されました。');
+      alert('デプロイ完了！収益分配対象として登録されました。');
       router.push('/');
       router.refresh();
     } catch (error: any) {
@@ -61,28 +60,32 @@ export default function PostPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans tracking-tight">
       <header className="px-6 py-4 border-b border-white/10 bg-slate-900/50 flex items-center justify-between sticky top-0 z-50 backdrop-blur-md">
         <Link href="/" className="text-slate-500 hover:text-white transition text-[10px] font-black uppercase tracking-[0.2em]">
-          ← Back
+          ← Exit
         </Link>
-        <div className="text-[11px] font-black tracking-[0.4em] text-blue-500 uppercase italic">30s Rapid Deployment</div>
-        <div className="w-10"></div>
+        <div className="text-[11px] font-black tracking-[0.4em] text-blue-500 uppercase italic">Rapid Deployment Console</div>
+        
+        {/* 作成・編集ボタンを追加 */}
+        <button className="border border-blue-500/50 text-blue-400 hover:bg-blue-500 hover:text-white px-4 py-1.5 rounded text-[10px] font-black uppercase transition-all">
+          ゲームを作成・編集する
+        </button>
       </header>
 
       <main className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-0 h-[calc(100vh-60px)]">
         
-        {/* 左側：入力エリア */}
         <section className="p-8 overflow-y-auto border-r border-white/5 space-y-10">
-          <div className="flex gap-4 border-b border-white/5 pb-4">
-            <button 
-              onClick={() => setActiveTab('code')}
-              className={`text-[10px] font-black tracking-widest uppercase pb-2 transition-all ${activeTab === 'code' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-slate-600'}`}
-            >
-              Code Snippet
-            </button>
+          {/* 位置を逆転：Folder Drop を左（デフォルト）に  */}
+          <div className="flex gap-8 border-b border-white/5 pb-4">
             <button 
               onClick={() => setActiveTab('folder')}
               className={`text-[10px] font-black tracking-widest uppercase pb-2 transition-all ${activeTab === 'folder' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-slate-600'}`}
             >
-              Folder Drop
+              01. Folder Drop
+            </button>
+            <button 
+              onClick={() => setActiveTab('code')}
+              className={`text-[10px] font-black tracking-widest uppercase pb-2 transition-all ${activeTab === 'code' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-slate-600'}`}
+            >
+              02. Code Snippet
             </button>
           </div>
 
@@ -91,7 +94,7 @@ export default function PostPage() {
               <input 
                 required
                 placeholder="GAME TITLE"
-                className="w-full bg-transparent border-b border-white/10 py-2 text-2xl font-black focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-800"
+                className="w-full bg-transparent border-b border-white/10 py-2 text-2xl font-black focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-900"
                 value={formData.title}
                 onChange={(e) => setFormData({...formData, title: e.target.value})}
               />
@@ -115,56 +118,60 @@ export default function PostPage() {
               </div>
             </div>
 
-            {activeTab === 'code' ? (
+            {activeTab === 'folder' ? (
+              <div className="h-80 border-2 border-dashed border-white/5 rounded-lg flex flex-col items-center justify-center text-slate-600 hover:border-blue-500/30 transition-all cursor-pointer bg-slate-900/20">
+                <span className="text-3xl mb-3">📁</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-center leading-relaxed">
+                  Drag & Drop Build Folder<br/>
+                  <span className="text-[8px] opacity-40">Unity / Godot / RPG Maker Web Build</span>
+                </span>
+                {/* 実際のファイル選択入力（透明） */}
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+              </div>
+            ) : (
               <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Paste HTML / React Code</label>
+                <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest">AI Generated Code (HTML)</label>
                 <textarea 
                   required
                   className="w-full h-80 bg-slate-900 border border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-500/50 transition-all"
-                  placeholder="Paste your AI-generated code here..."
+                  placeholder="Paste your AI-generated code here for instant deployment..."
                   value={formData.game_code}
                   onChange={(e) => setFormData({...formData, game_code: e.target.value})}
                 />
-              </div>
-            ) : (
-              <div className="h-80 border-2 border-dashed border-white/5 rounded-lg flex flex-col items-center justify-center text-slate-600 hover:border-blue-500/30 transition-all cursor-pointer">
-                <span className="text-2xl mb-2">📦</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-center">Drag & Drop Build Folder<br/><span className="text-[8px] opacity-50">(Unity / Godot / Tsukuru)</span></span>
               </div>
             )}
 
             <button 
               type="submit"
-              disabled={loading || !formData.game_code}
+              disabled={loading || (activeTab === 'code' && !formData.game_code)}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-black py-4 rounded text-xs uppercase tracking-[0.3em] transition-all shadow-[0_0_40px_rgba(37,99,235,0.2)]"
             >
-              {loading ? 'Deploying...' : 'Deploy & Monetize'}
+              {loading ? 'Processing...' : 'Deploy & Start Earning'}
             </button>
           </form>
         </section>
 
-        {/* 右側：リアルタイムプレビュー  */}
-        <section className="bg-black relative overflow-hidden">
+        <section className="bg-black relative overflow-hidden flex items-center justify-center">
           <div className="absolute top-4 left-4 z-10">
-            <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2 shadow-lg">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Live Preview
+            <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Preview Output
             </span>
           </div>
           {previewUrl ? (
             <iframe 
               src={previewUrl} 
-              className="w-full h-full border-none shadow-2xl"
-              sandbox="allow-scripts" // セキュリティのためのサンドボックス設定 
-              title="Game Preview"
+              className="w-full h-full border-none"
+              sandbox="allow-scripts"
+              title="Deployment Preview"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-slate-800 italic">
-              <span className="text-4xl mb-4">🕹️</span>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em]">Waiting for Code Input...</p>
+            <div className="text-center space-y-4">
+              <div className="text-4xl opacity-20 italic font-black">AIGP</div>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-800">Standby for Asset Verification</p>
             </div>
           )}
         </section>
       </main>
     </div>
   );
-} 
+}
