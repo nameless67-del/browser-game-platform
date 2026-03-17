@@ -1,188 +1,120 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-interface GameCardProps {
-  id: string; // リンク用にIDを追加
-  title: string;
-  desc: string;
-  author: string;
-  avgTime: number | string;
-  isSmall?: boolean;
-  thumbnail?: string;
-}
+export default function PlayPage() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [game, setGame] = useState<any>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false); // プレイ中かどうかのフラグ
+  const isFocused = useRef(true);
 
-// カード全体を Link で囲み、プレイ画面へ飛ぶように修正
-const GameCard = ({ id, title, desc, author, avgTime, isSmall = false, thumbnail }: GameCardProps) => (
-  <Link href={`/play/${id}`}>
-    <div className={`flex-shrink-0 ${isSmall ? 'w-40' : 'w-48'} group cursor-pointer`}>
-      <div className={`relative aspect-[4/5] bg-slate-100 dark:bg-slate-900 rounded-lg mb-1.5 overflow-hidden border border-slate-200 dark:border-white/5 group-hover:border-blue-500/50 transition-all shadow-sm`}>
-        {thumbnail ? (
-          <img src={thumbnail} alt={title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 dark:text-slate-700 uppercase font-black tracking-tighter italic">No Preview</div>
-        )}
-        <div className="absolute bottom-1.5 right-1.5 bg-white/90 dark:bg-black/70 px-1 py-0.5 rounded text-[9px] text-blue-600 dark:text-blue-400 font-mono border border-slate-100 dark:border-white/5 shadow-sm">
-          {avgTime || '0'}:00
-        </div>
-      </div>
+  // 1. ゲームデータの取得
+  useEffect(() => {
+    const fetchGame = async () => {
+      const { data } = await supabase.from('games').select('*').eq('id', id).single();
+      if (data) setGame(data);
+    };
+    fetchGame();
+  }, [id]);
+
+  // 2. セッション作成（無限増殖防止ガード付き）
+  useEffect(() => {
+    if (!game || sessionId || !isPlaying) return; 
+
+    const startSession = async () => {
+      let guestId = localStorage.getItem('narou_guest_id');
+      if (!guestId) {
+        guestId = crypto.randomUUID();
+        localStorage.setItem('narou_guest_id', guestId);
+      }
+
+      const { data } = await supabase
+        .from('play_sessions')
+        .insert([{ 
+          game_id: id, 
+          guest_id: guestId,
+          active_seconds: 0 
+        }])
+        .select()
+        .single();
       
-      <div className="px-0.5 space-y-0.5">
-        <h3 className="font-bold text-[11px] text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 tracking-tight leading-tight">{title}</h3>
-        <p className="text-[9px] text-slate-500 truncate uppercase tracking-tighter font-medium">{author}</p>
-        
-        {/* メトリクス表示：アイコンと数字のみでスペースを最小化 */}
-        <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold border-t border-slate-100 dark:border-white/5 pt-1 mt-1">
-          <span className="flex items-center gap-0.5">▶ {Math.floor(Math.random() * 1000)}</span>
-          <span className="flex items-center gap-0.5 text-pink-500/70">❤ {Math.floor(Math.random() * 100)}</span>
-          <span className="flex items-center gap-0.5 text-blue-500/70">💬 {Math.floor(Math.random() * 50)}</span>
-          <span className="flex items-center gap-0.5 text-yellow-500 font-black italic">★ 4.5</span>
-        </div>
-      </div>
-    </div>
-  </Link>
-);
-
-export default function NarouTopPage() {
-  const [allGames, setAllGames] = useState<any[]>([]);
-  const [filteredGames, setFilteredGames] = useState<any[]>([]);
-  const [genre, setGenre] = useState('All');
-  const [sort, setSort] = useState('Newest');
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    // ログイン状態の確認
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
+      if (data) setSessionId(data.id);
     };
-    checkUser();
 
-    const fetchAll = async () => {
-      // データベースからゲーム一覧を取得
-      const { data } = await supabase.from('games').select('*').order('created_at', { ascending: false });
-      if (data) setAllGames(data);
+    startSession();
+
+    const handleFocus = () => { isFocused.current = true; };
+    const handleBlur = () => { isFocused.current = false; };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    const interval = setInterval(async () => {
+      if (sessionId && isFocused.current) {
+        await supabase.from('play_heartbeats').insert([{
+          session_id: sessionId,
+          is_focused: true,
+          has_input: true 
+        }]);
+        await supabase.rpc('increment_active_seconds', { session_id_param: sessionId, seconds_to_add: 10 });
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
     };
-    fetchAll();
-  }, []);
+  }, [game, sessionId, id, isPlaying]);
 
-  useEffect(() => {
-    let result = [...allGames];
-    // ジャンルフィルタリング
-    if (genre !== 'All') {
-      result = result.filter(g => g.genre === genre);
-    }
-    // ソートロジック
-    result.sort((a, b) => {
-      if (sort === 'Popular') return (Number(b.play_time_avg) || 0) - (Number(a.play_time_avg) || 0);
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    setFilteredGames(result);
-  }, [genre, sort, allGames]);
+  if (!game) return <div className="min-h-screen bg-black flex items-center justify-center text-white font-black animate-pulse uppercase tracking-[0.3em]">Loading Asset...</div>;
 
-  // ログインガード機能
-  const handleEditorClick = (e: React.MouseEvent) => {
-    if (!user) {
-      e.preventDefault();
-      alert('ゲームを作成・編集するにはログインしてください');
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20 font-sans tracking-tight transition-colors duration-300">
-      <header className="flex items-center justify-between px-6 py-2 border-b border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="text-lg font-black tracking-tighter uppercase italic text-slate-900 dark:text-white">
-          NAROU GAME <span className="text-blue-600 dark:text-blue-500 text-[10px] not-italic ml-1 border border-blue-600/30 px-1 rounded">BETA</span>
-        </div>
-        
-        <div className="flex gap-2 items-center">
-          <Link href="/editor" onClick={handleEditorClick}>
-            <button className="flex items-center gap-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded text-[11px] font-black uppercase transition-all border border-blue-600/20 shadow-sm active:scale-95">
-              <span>🛠️</span> ゲームを作る
-            </button>
-          </Link>
-
-          <Link href="/search">
-            <button className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-4 py-1.5 rounded text-[11px] font-bold transition-all border border-slate-200 dark:border-white/5 shadow-sm active:scale-95">
-              <span>🔍</span> 探す
-            </button>
-          </Link>
-          
-          <Link href="/post">
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded text-[11px] font-black uppercase transition-all shadow-md active:scale-95">
-              投稿
-            </button>
-          </Link>
-
-          <button className="text-slate-400 hover:text-slate-900 px-3 py-1.5 text-[11px] font-bold transition-all">
-            Login
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 pt-6 space-y-10">
-        
-        {/* Continue Playing */}
-        <section>
-          <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-400 mb-4 flex items-center gap-3 italic">
-            <span className="w-6 h-[1px] bg-blue-600"></span> Continue Playing
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {allGames.slice(0, 10).map((game) => (
-              <GameCard key={game.id} id={game.id} title={game.title} desc={game.description} avgTime={game.play_time_avg} author={game.author} thumbnail={game.thumbnail_url} isSmall />
-            ))}
+  // プレイ前の詳細表示
+  if (!isPlaying) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans tracking-tight">
+        <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+          <Link href="/" className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition text-[10px] font-black uppercase tracking-[0.2em]">← Back</Link>
+        </header>
+        <main className="max-w-4xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="aspect-[4/5] bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-2xl">
+            {game.thumbnail_url ? <img src={game.thumbnail_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-800 font-black text-4xl italic -rotate-12">NO IMAGE</div>}
           </div>
-        </section>
-
-        {/* Recommended */}
-        <section>
-          <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-purple-600 mb-4 flex items-center gap-3 italic">
-            <span className="w-6 h-[1px] bg-purple-600"></span> Recommended
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {allGames.map((game) => (
-              <GameCard key={game.id} id={game.id} title={game.title} desc={game.description} avgTime={game.play_time_avg} author={game.author} thumbnail={game.thumbnail_url} />
-            ))}
-          </div>
-        </section>
-
-        {/* Ranking Grid */}
-        <section className="pt-6 border-t border-slate-100 dark:border-white/5">
-          <div className="flex flex-col gap-4 mb-6">
-            <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-yellow-600 flex items-center gap-3 italic">
-              <span className="w-6 h-[1px] bg-yellow-600"></span> Ranking
-            </h2>
-            
-            <div className="flex items-center gap-6">
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-[10px] font-black text-blue-600 uppercase tracking-widest px-2 py-1 rounded focus:outline-none cursor-pointer">
-                <option value="Newest">NEWEST</option>
-                <option value="Popular">POPULAR</option>
-              </select>
-
-              <div className="flex gap-4 overflow-x-auto scrollbar-hide">
-                {['All', 'Action', 'Strategy', 'Puzzle', 'Shooting', 'RPG', 'Novel'].map((cat) => (
-                  <button key={cat} onClick={() => setGenre(cat)} className={`text-[10px] font-black tracking-widest uppercase transition-all whitespace-nowrap pb-1 ${genre === cat ? 'text-slate-900 border-b-2 border-blue-600 dark:text-white dark:border-blue-500' : 'text-slate-400 hover:text-slate-600'}`}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-col justify-center space-y-8">
+            <div className="space-y-2">
+              <span className="text-blue-600 text-[10px] font-black uppercase tracking-[0.3em]">{game.genre}</span>
+              <h1 className="text-5xl font-black tracking-tighter leading-none">{game.title}</h1>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">by {game.author}</p>
             </div>
+            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">{game.description || "No description provided."}</p>
+            <button onClick={() => setIsPlaying(true)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-xl text-xs uppercase tracking-[0.4em] transition-all shadow-xl active:scale-95">
+              Play Engine Start
+            </button>
           </div>
+        </main>
+      </div>
+    );
+  }
 
-          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-x-3 gap-y-8">
-            {filteredGames.map((game, i) => (
-              <div key={game.id} className="relative group">
-                <div className="absolute -top-2 -left-2 z-10 w-5 h-5 bg-slate-900 text-white flex items-center justify-center font-black rounded italic text-[10px] shadow-md border border-white/10">
-                  {i + 1}
-                </div>
-                <GameCard id={game.id} title={game.title} desc={game.description} avgTime={game.play_time_avg} author={game.author} thumbnail={game.thumbnail_url} />
-              </div>
-            ))}
-          </div>
-        </section>
-      </main>
+  // プレイ画面（iframe）
+  return (
+    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden z-[100]">
+      <header className="h-10 bg-slate-900 border-b border-white/10 flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black text-blue-500 italic uppercase">Live</span>
+          <h1 className="text-[11px] font-bold text-white truncate max-w-[200px]">{game.title}</h1>
+        </div>
+        <button onClick={() => setIsPlaying(false)} className="text-[9px] font-black text-slate-500 hover:text-white transition-colors uppercase tracking-widest">
+          Close [×]
+        </button>
+      </header>
+      <div className="flex-1 relative bg-white">
+        <iframe srcDoc={game.game_code} className="w-full h-full border-none" sandbox="allow-scripts" title="Game Window" />
+      </div>
     </div>
   );
 }
