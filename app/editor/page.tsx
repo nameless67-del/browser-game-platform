@@ -26,7 +26,7 @@ export default function EditorPage() {
     if (!prompt) return;
     setIsLoading(true);
 
-    // デバッグ用ログ：APIキーが読み込まれているか確認（最初の5文字だけ表示）
+    // デバッグ用ログ：APIキーの読み込み確認
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     console.log("Debug - API Key loaded:", apiKey ? `${apiKey.substring(0, 5)}***` : "MISSING");
 
@@ -38,8 +38,8 @@ export default function EditorPage() {
       // 1. APIキーを使用して初期化
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // 2. モデルの選択（1.5 Flashを使用）
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      // 2. モデルの選択（404エラー回避のため -latest を付与）
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
       // 3. システム命令（仕様書に基づいた制約）
       const systemInstruction = `
@@ -49,7 +49,7 @@ export default function EditorPage() {
         【制約事項】
         ・CSSとJavaScriptはすべて1つのHTML内の<style>および<script>タグに記述してください。
         ・外部ライブラリは極力使わず、バニラJavaScriptで記述してください。
-        ・著作権を侵害する特定の名称やキャラクター（マリオ等）は避け、汎用的なデザインにしてください。
+        ・著作権を侵害する特定の名称やキャラクターは避け、汎用的なデザインにしてください。
         ・解説テキストやMarkdownの枠（\`\`\`html など）は一切含めず、<!DOCTYPE html>から始まるコードのみを出力してください。
       `;
 
@@ -58,7 +58,7 @@ export default function EditorPage() {
       const response = await result.response;
       let text = response.text();
 
-      // 5. 不要な装飾のクレンジング
+      // 5. 不要な装飾（```html ... ```）のクレンジング
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
@@ -90,7 +90,7 @@ export default function EditorPage() {
       </header>
 
       <main className="flex h-[calc(100vh-60px)]">
-        {/* 左：AIインストラクション & コードビュー */}
+        {/* 左側：入力エリア */}
         <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto bg-white dark:bg-slate-950">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function EditorPage() {
           </div>
         </section>
 
-        {/* 右：リアルタイムプレビュー */}
+        {/* 右側：プレビューエリア */}
         <section className="flex-1 bg-slate-100 dark:bg-black relative overflow-hidden">
           {previewUrl ? (
             <iframe 
@@ -129,14 +129,14 @@ export default function EditorPage() {
           ) : (
             <div className="flex items-center justify-center h-full text-slate-300 dark:text-slate-800 italic select-none">
               <div className="text-center">
-                <div className="text-5xl mb-4 font-black opacity-20 dark:opacity-10 tracking-tighter">BOOTING...</div>
+                <div className="text-5xl mb-4 font-black opacity-20 dark:opacity-10 tracking-tighter uppercase">Waiting...</div>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Your vision will materialize here</p>
               </div>
             </div>
           )}
           
           <div className="absolute top-4 left-4">
-            <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2">
+            <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2 shadow-sm">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Live Workspace
             </span>
           </div>
