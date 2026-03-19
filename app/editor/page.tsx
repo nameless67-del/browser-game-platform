@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-// Gemini API用のSDKをインポート
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default function EditorPage() {
@@ -24,47 +23,42 @@ export default function EditorPage() {
   // Gemini APIを叩いてゲームコードを生成する関数
   const handleGenerate = async () => {
     if (!prompt) return;
+    
+    // 【診断モード】ボタンを押した瞬間にキーの状態をチェック
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    
+    if (!apiKey || apiKey === "") {
+      alert("❌ エラー: APIキーが見つかりません。\n\n【確認してほしいこと】\n1. .env.local のファイル名が「.」から始まっていますか？\n2. ファイルは app フォルダの外にありますか？\n3. NEXT_PUBLIC_GEMINI_API_KEY という名前は合っていますか？");
+      console.error("Environment Variable MISSING: NEXT_PUBLIC_GEMINI_API_KEY is undefined.");
+      return;
+    }
+
     setIsLoading(true);
 
-    // デバッグ用ログ：APIキーの読み込み確認
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    console.log("Debug - API Key loaded:", apiKey ? `${apiKey.substring(0, 5)}***` : "MISSING");
-
     try {
-      if (!apiKey) {
-        throw new Error("APIキーが設定されていません。.env.localを確認してください。");
-      }
-
-      // 1. APIキーを使用して初期化
       const genAI = new GoogleGenerativeAI(apiKey);
-      
-      // 2. モデルの選択（404エラー回避のため -latest を付与）
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-      // 3. システム命令（仕様書に基づいた制約）
       const systemInstruction = `
         あなたは天才的なブラウザゲーム開発者です。
         ユーザーの指示に従い、1つのHTMLファイルで完結する高品質なゲームコードを出力してください。
         
         【制約事項】
         ・CSSとJavaScriptはすべて1つのHTML内の<style>および<script>タグに記述してください。
-        ・外部ライブラリは極力使わず、バニラJavaScriptで記述してください。
-        ・著作権を侵害する特定の名称やキャラクターは避け、汎用的なデザインにしてください。
         ・解説テキストやMarkdownの枠（\`\`\`html など）は一切含めず、<!DOCTYPE html>から始まるコードのみを出力してください。
       `;
 
-      // 4. 生成の実行
       const result = await model.generateContent([systemInstruction, prompt]);
       const response = await result.response;
       let text = response.text();
 
-      // 5. 不要な装飾（```html ... ```）のクレンジング
+      // クレンジング処理
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
     } catch (error: any) {
       console.error("Gemini API Error Details:", error);
-      alert(`生成エラー: ${error.message || "APIキーの設定を確認してください。"}`);
+      alert(`生成エラー: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +84,6 @@ export default function EditorPage() {
       </header>
 
       <main className="flex h-[calc(100vh-60px)]">
-        {/* 左側：入力エリア */}
         <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto bg-white dark:bg-slate-950">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -100,7 +93,7 @@ export default function EditorPage() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-600/50 transition-all shadow-inner"
-              placeholder="例: ブロック崩しゲームを作って。パステルカラーの可愛いデザインで。"
+              placeholder="例: ブロック崩しゲームを作って。"
             />
           </div>
           
@@ -117,7 +110,6 @@ export default function EditorPage() {
           </div>
         </section>
 
-        {/* 右側：プレビューエリア */}
         <section className="flex-1 bg-slate-100 dark:bg-black relative overflow-hidden">
           {previewUrl ? (
             <iframe 
@@ -134,7 +126,6 @@ export default function EditorPage() {
               </div>
             </div>
           )}
-          
           <div className="absolute top-4 left-4">
             <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2 shadow-sm">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Live Workspace
