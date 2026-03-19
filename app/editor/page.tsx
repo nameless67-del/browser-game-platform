@@ -10,7 +10,6 @@ export default function EditorPage() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // コードが生成・更新されたら実行用のURL（Blob）を生成する
   useEffect(() => {
     if (generatedCode) {
       const blob = new Blob([generatedCode], { type: 'text/html' });
@@ -20,16 +19,21 @@ export default function EditorPage() {
     }
   }, [generatedCode]);
 
-  // Gemini APIを叩いてゲームコードを生成する関数
   const handleGenerate = async () => {
     if (!prompt) return;
-    
-    // 【診断モード】ボタンを押した瞬間にキーの状態をチェック
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    
-    if (!apiKey || apiKey === "") {
-      alert("❌ エラー: APIキーが見つかりません。\n\n【確認してほしいこと】\n1. .env.local のファイル名が「.」から始まっていますか？\n2. ファイルは app フォルダの外にありますか？\n3. NEXT_PUBLIC_GEMINI_API_KEY という名前は合っていますか？");
-      console.error("Environment Variable MISSING: NEXT_PUBLIC_GEMINI_API_KEY is undefined.");
+
+    // 1. 環境変数の取得（複数の可能性をチェック）
+    const apiKey = 
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY || 
+      process.env.NEXT_PUBLIC_GEMINI_APIKEY;
+
+    // デバッグログ：ブラウザのコンソール（F12）でこれが出るか確認してください
+    console.log("Checking Environment Variables...");
+    console.log("GEMINI_KEY Status:", apiKey ? "FOUND (Starts with " + apiKey.substring(0, 5) + ")" : "NOT FOUND");
+    console.log("SUPABASE_URL Status:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "FOUND" : "NOT FOUND");
+
+    if (!apiKey) {
+      alert("❌ 依然としてAPIキーがプログラムに届いていません。\n\n【最終確認コマンド】\nターミナルで Ctrl+C を押し、一度サーバーを止めてから \nnpm run dev をやり直してください。\nこれを行わないと .env.local は反映されません。");
       return;
     }
 
@@ -37,35 +41,33 @@ export default function EditorPage() {
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
+      // モデル名を最新の安定版に固定
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
       const systemInstruction = `
         あなたは天才的なブラウザゲーム開発者です。
         ユーザーの指示に従い、1つのHTMLファイルで完結する高品質なゲームコードを出力してください。
-        
-        【制約事項】
-        ・CSSとJavaScriptはすべて1つのHTML内の<style>および<script>タグに記述してください。
-        ・解説テキストやMarkdownの枠（\`\`\`html など）は一切含めず、<!DOCTYPE html>から始まるコードのみを出力してください。
+        解説やMarkdown（\`\`\`html）は一切不要です。直接HTMLコードだけを出してください。
       `;
 
       const result = await model.generateContent([systemInstruction, prompt]);
       const response = await result.response;
       let text = response.text();
 
-      // クレンジング処理
+      // クレンジング処理（余計な装飾を剥ぎ取る）
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
     } catch (error: any) {
       console.error("Gemini API Error Details:", error);
-      alert(`生成エラー: ${error.message}`);
+      alert(`生成エラーが発生しました: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans tracking-tight transition-colors">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans tracking-tight">
       <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white/80 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
         <Link href="/" className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition text-[10px] font-black uppercase tracking-[0.2em]">← Exit Editor</Link>
         <div className="text-[11px] font-black tracking-[0.4em] text-blue-600 dark:text-blue-500 uppercase italic">AI Creative Studio</div>
@@ -92,8 +94,8 @@ export default function EditorPage() {
             <textarea 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-600/50 transition-all shadow-inner"
-              placeholder="例: ブロック崩しゲームを作って。"
+              className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-600/50 transition-all"
+              placeholder="例: 弾幕を避けるだけのシンプルなゲームを作って。"
             />
           </div>
           
@@ -104,7 +106,7 @@ export default function EditorPage() {
             <textarea 
               value={generatedCode}
               onChange={(e) => setGeneratedCode(e.target.value)}
-              className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none focus:border-blue-600/50 transition-all shadow-inner leading-relaxed"
+              className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none"
               placeholder="ここにコードが表示されます..."
             />
           </div>
@@ -116,7 +118,6 @@ export default function EditorPage() {
               src={previewUrl} 
               className="w-full h-full border-none bg-white" 
               sandbox="allow-scripts" 
-              title="AI Output Preview"
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-300 dark:text-slate-800 italic select-none">
@@ -126,11 +127,6 @@ export default function EditorPage() {
               </div>
             </div>
           )}
-          <div className="absolute top-4 left-4">
-            <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2 shadow-sm">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Live Workspace
-            </span>
-          </div>
         </section>
       </main>
     </div>
