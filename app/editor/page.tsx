@@ -26,24 +26,31 @@ export default function EditorPage() {
     if (!prompt) return;
     setIsLoading(true);
 
+    // デバッグ用ログ：APIキーが読み込まれているか確認（最初の5文字だけ表示）
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    console.log("Debug - API Key loaded:", apiKey ? `${apiKey.substring(0, 5)}***` : "MISSING");
+
     try {
+      if (!apiKey) {
+        throw new Error("APIキーが設定されていません。.env.localを確認してください。");
+      }
+
       // 1. APIキーを使用して初期化
-      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
+      const genAI = new GoogleGenerativeAI(apiKey);
       
-      // 2. モデルの選択（コストと速度に優れた 1.5 Flash を使用）
+      // 2. モデルの選択（1.5 Flashを使用）
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      // 3. システム命令（仕様書に基づいた制約）の構築
+      // 3. システム命令（仕様書に基づいた制約）
       const systemInstruction = `
         あなたは天才的なブラウザゲーム開発者です。
         ユーザーの指示に従い、1つのHTMLファイルで完結する高品質なゲームコードを出力してください。
         
         【制約事項】
         ・CSSとJavaScriptはすべて1つのHTML内の<style>および<script>タグに記述してください。
-        ・外部ライブラリ（CDN等）は極力使わず、ピュアなJavaScriptで記述してください。
-        ・画像が必要な場合は、プレースホルダ(https://picsum.photos/)を使うか、CSS/Canvasで描画してください。
-        ・著作権を侵害する特定の名称やキャラクターは避け、汎用的なデザインにしてください。
-        ・解説やMarkdownの枠（\`\`\`html など）は一切含めず、<!DOCTYPE html>から始まるコードのみを直接出力してください。
+        ・外部ライブラリは極力使わず、バニラJavaScriptで記述してください。
+        ・著作権を侵害する特定の名称やキャラクター（マリオ等）は避け、汎用的なデザインにしてください。
+        ・解説テキストやMarkdownの枠（\`\`\`html など）は一切含めず、<!DOCTYPE html>から始まるコードのみを出力してください。
       `;
 
       // 4. 生成の実行
@@ -51,13 +58,13 @@ export default function EditorPage() {
       const response = await result.response;
       let text = response.text();
 
-      // 5. 万が一Markdownの装飾が含まれていた場合のクレンジング
+      // 5. 不要な装飾のクレンジング
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
     } catch (error: any) {
-      console.error("Gemini API Error:", error);
-      alert("生成に失敗しました。APIキーを確認するか、少し時間を置いて試してください。");
+      console.error("Gemini API Error Details:", error);
+      alert(`生成エラー: ${error.message || "APIキーの設定を確認してください。"}`);
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +100,7 @@ export default function EditorPage() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-600/50 transition-all shadow-inner"
-              placeholder="例: 画面内を跳ね回る赤いボールを、クリックで消していくゲーム。スコア機能付き。"
+              placeholder="例: ブロック崩しゲームを作って。パステルカラーの可愛いデザインで。"
             />
           </div>
           
@@ -105,7 +112,7 @@ export default function EditorPage() {
               value={generatedCode}
               onChange={(e) => setGeneratedCode(e.target.value)}
               className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none focus:border-blue-600/50 transition-all shadow-inner leading-relaxed"
-              placeholder="生成されたコードを直接編集することも可能です..."
+              placeholder="ここにコードが表示されます..."
             />
           </div>
         </section>
