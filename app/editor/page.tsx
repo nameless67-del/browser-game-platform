@@ -12,12 +12,13 @@ export default function EditorPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // 生成されたコードをブラウザで実行可能な形式（Blob URL）に変換
+  // 生成されたコードをiframeで実行可能なBlob URLに変換
   useEffect(() => {
     if (generatedCode) {
       const blob = new Blob([generatedCode], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
+      // メモリ管理のため、古いURLを破棄
       return () => URL.revokeObjectURL(url);
     }
   }, [generatedCode]);
@@ -26,9 +27,10 @@ export default function EditorPage() {
   const handleGenerate = async () => {
     if (!prompt) return;
 
+    // 環境変数からAPIキーを取得
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-    // デバッグログ
+    // デバッグログ：ブラウザのF12コンソールで確認用
     console.log("Checking Environment Variables...");
     console.log("GEMINI_KEY Status:", apiKey ? "FOUND" : "NOT FOUND");
 
@@ -40,13 +42,18 @@ export default function EditorPage() {
     setIsLoading(true);
 
     try {
-      // 修正ポイント：APIバージョンを "v1" に明示的に指定して 404 を回避
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3-flash",
-        apiVersion: "v1" 
-      });
+      /**
+       * 修正ポイント: 
+       * 第1引数にモデルのパラメータ、
+       * 第2引数にリクエストのオプション（apiVersion）を渡します。
+       * これで TypeScript の型エラーを回避しつつ、正式版 v1 窓口を利用できます。
+       */
+      const model = genAI.getGenerativeModel(
+        { model: "gemini-3-flash" },
+        { apiVersion: "v1" }
+      );
 
       const systemInstruction = `
         あなたは天才的なブラウザゲーム開発者です。
@@ -63,7 +70,7 @@ export default function EditorPage() {
       const response = await result.response;
       let text = response.text();
 
-      // 余計なMarkdown記号があれば削除
+      // 不要なMarkdown記号があれば削除
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
@@ -96,7 +103,7 @@ export default function EditorPage() {
 
       if (error) {
         console.error("Supabase Database Error:", error);
-        throw new Error("データベースへの書き込みに失敗しました。テーブル 'games' が存在するか確認してください。");
+        throw new Error("データベースへの書き込みに失敗しました。");
       }
       
       alert("🎉 データベースへの保存に成功しました！");
@@ -135,6 +142,7 @@ export default function EditorPage() {
       </header>
 
       <main className="flex h-[calc(100vh-60px)]">
+        {/* 左側：入力とソースコード */}
         <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -161,6 +169,7 @@ export default function EditorPage() {
           </div>
         </section>
 
+        {/* 右側：プレビュー画面 */}
         <section className="flex-1 bg-slate-100 dark:bg-black relative overflow-hidden">
           {previewUrl ? (
             <iframe 
