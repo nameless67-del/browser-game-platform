@@ -51,7 +51,7 @@ export default function EditorPage() {
        * これで TypeScript の型エラーを回避しつつ、正式版 v1 窓口を利用できます。
        */
       const model = genAI.getGenerativeModel(
-        { model: "gemini-3" },
+        { model: "gemini-2.5-flash" },
         { apiVersion: "v1" }
       );
 
