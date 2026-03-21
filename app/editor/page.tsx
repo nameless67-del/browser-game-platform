@@ -12,7 +12,7 @@ export default function EditorPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // 生成されたコードをiframeで実行可能なBlob URLに変換
+  // 生成されたコードをブラウザで実行可能な形式（Blob URL）に変換
   useEffect(() => {
     if (generatedCode) {
       const blob = new Blob([generatedCode], { type: 'text/html' });
@@ -28,7 +28,7 @@ export default function EditorPage() {
 
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-    // デバッグログ：ブラウザのコンソールで確認用
+    // デバッグログ
     console.log("Checking Environment Variables...");
     console.log("GEMINI_KEY Status:", apiKey ? "FOUND" : "NOT FOUND");
 
@@ -40,10 +40,13 @@ export default function EditorPage() {
     setIsLoading(true);
 
     try {
+      // 修正ポイント：APIバージョンを "v1" に明示的に指定して 404 を回避
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // 修正ポイント：ご提示のリストにある最新モデル「Gemini 3 Flash」を指定
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash" });
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-3-flash",
+        apiVersion: "v1" 
+      });
 
       const systemInstruction = `
         あなたは天才的なブラウザゲーム開発者です。
@@ -60,13 +63,13 @@ export default function EditorPage() {
       const response = await result.response;
       let text = response.text();
 
-      // 不要なMarkdown記号があれば削除
+      // 余計なMarkdown記号があれば削除
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
     } catch (error: any) {
       console.error("Gemini API Error:", error);
-      alert(`生成エラー: ${error.message}\n(モデル名 "gemini-3-flash" が見つからない場合は "gemini-2.5-flash" も試してください)`);
+      alert(`生成エラー: ${error.message}\n(404が出る場合はモデル名を "gemini-2.5-flash" に変更してみてください)`);
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +78,7 @@ export default function EditorPage() {
   // --- Supabaseへの保存処理 ---
   const handleSave = async () => {
     if (!generatedCode) {
-      alert("保存するコードがありません。");
+      alert("保存するコードがありません。先に生成してください。");
       return;
     }
 
@@ -106,7 +109,6 @@ export default function EditorPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 font-sans tracking-tight">
-      {/* ヘッダー */}
       <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white/80 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
         <Link href="/" className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition text-[10px] font-black uppercase tracking-[0.2em]">
           ← Exit Editor
@@ -132,9 +134,7 @@ export default function EditorPage() {
         </div>
       </header>
 
-      {/* メインエリア */}
       <main className="flex h-[calc(100vh-60px)]">
-        {/* 左側：入力とソースコード */}
         <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -161,7 +161,6 @@ export default function EditorPage() {
           </div>
         </section>
 
-        {/* 右側：プレビュー画面 */}
         <section className="flex-1 bg-slate-100 dark:bg-black relative overflow-hidden">
           {previewUrl ? (
             <iframe 
