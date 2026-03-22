@@ -23,7 +23,7 @@ export default function EditorPage() {
     }
   }, [generatedCode]);
 
-  // --- AI生成処理 (Hybrid AI Engine - Layer 2) ---
+  // --- AI生成処理 (NAROU Hybrid AI Engine - Layer 2) ---
   const handleGenerate = async () => {
     if (!prompt) return;
 
@@ -42,7 +42,7 @@ export default function EditorPage() {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // 第2.5回修正：正式版 v1 窓口を利用しつつ、動作確認済みの gemini-2.5-flash を指定
+      // モデルIDは安定動作が確認されている gemini-2.5-flash を使用
       const model = genAI.getGenerativeModel(
         { model: "gemini-2.5-flash" },
         { apiVersion: "v1" }
@@ -64,7 +64,7 @@ export default function EditorPage() {
       const response = await result.response;
       let text = response.text();
 
-      // 余計な記号を排除し、純粋なHTMLコードのみを抽出
+      // 不要なMarkdown記号を排除
       text = text.replace(/```html/g, "").replace(/```/g, "").trim();
 
       setGeneratedCode(text);
@@ -85,14 +85,13 @@ export default function EditorPage() {
 
     setIsSaving(true);
     try {
-      // NAROU GAME のテーブル定義に合わせ、'gamecode' カラムへ挿入
-      // また、サムネイルの NULL エラーを防ぐために EMPTY 文字列を明示
+      // 修正：カラム名を正確に 'game_code' に指定
       const { error } = await supabase
         .from('games')
         .insert([
           { 
             title: prompt.substring(0, 20) || "Untitled AI Game", 
-            gamecode: generatedCode, // code ではなく gamecode に保存
+            game_code: generatedCode, // ← ここを gamecode から game_code に修正しました
             prompt: prompt,
             thumbnail: ""           // 既存データとの整合性のための空文字
           }
@@ -141,7 +140,7 @@ export default function EditorPage() {
 
       {/* メインエリア */}
       <main className="flex h-[calc(100vh-60px)]">
-        {/* 左側：プロンプト入力とソースコード */}
+        {/* 左側：入力とソースコード */}
         <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -150,7 +149,7 @@ export default function EditorPage() {
             <textarea 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-white"
               placeholder="例: パステルカラーのテトリス。消える時にエフェクトが欲しい。"
             />
           </div>
@@ -162,8 +161,8 @@ export default function EditorPage() {
             <textarea 
               value={generatedCode}
               onChange={(e) => setGeneratedCode(e.target.value)}
-              className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none"
-              placeholder="AIが生成した NAROU GAME 規格のコードがここに表示されます..."
+              className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none text-slate-900 dark:text-white"
+              placeholder="生成されたコードがここに表示されます..."
             />
           </div>
         </section>
