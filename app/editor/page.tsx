@@ -25,9 +25,13 @@ export default function EditorPage() {
 
   // --- AI生成処理 (NAROU Hybrid AI Engine - Layer 2) ---
   const handleGenerate = async () => {
-    if (!prompt) return;
+    // 二重送信防止ガード
+    if (isLoading || !prompt) return;
 
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    // デバッグ用ログ：APIキーの読み込み確認（本番公開前に削除推奨）
+    console.log("NAROU Engine: Initializing with Key Prefix:", apiKey?.substring(0, 8));
 
     if (!apiKey) {
       alert("❌ APIキーが設定されていません。\n.env.localを確認し、サーバーを再起動してください。");
@@ -39,7 +43,7 @@ export default function EditorPage() {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // モデルIDは安定動作が確認されている gemini-2.0-flash を使用
+      // 2026年現在の最新・高速モデル "gemini-2.5-flash" を使用
       const model = genAI.getGenerativeModel(
         { model: "gemini-2.5-flash" },
         { apiVersion: "v1" }
@@ -66,8 +70,14 @@ export default function EditorPage() {
 
       setGeneratedCode(text);
     } catch (error: any) {
-      console.error("Gemini API Error:", error);
-      alert(`生成エラー: ${error.message}`);
+      console.error("Gemini API Error Detail:", error);
+      
+      // クォータエラー（429）等の具体的なフィードバック
+      if (error.message?.includes('429')) {
+        alert("API制限に達しました。1分待ってから再度お試しください。");
+      } else {
+        alert(`生成エラー: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +97,7 @@ export default function EditorPage() {
           <button 
             onClick={handleGenerate}
             disabled={isLoading}
-            className="bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white px-4 py-1.5 rounded text-[10px] font-black uppercase disabled:opacity-50 transition-all active:scale-95 border border-slate-200 dark:border-white/10"
+            className="bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white px-4 py-1.5 rounded text-[10px] font-black uppercase disabled:opacity-50 transition-all active:scale-95 border border-slate-200 dark:border-white/10 shadow-sm"
           >
             {isLoading ? 'Generating...' : 'AI再生成'}
           </button>
@@ -112,7 +122,7 @@ export default function EditorPage() {
             <textarea 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-white shadow-inner"
+              className="w-full h-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-white shadow-inner resize-none"
               placeholder="例: パステルカラーのテトリス。消える時にエフェクトが欲しい。"
             />
           </div>
