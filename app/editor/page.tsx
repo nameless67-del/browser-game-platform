@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { supabase } from '@/lib/supabase';
+import PublishModal from './components/PublishModal';
 
 export default function EditorPage() {
   const [prompt, setPrompt] = useState('');
   const [generatedCode, setGeneratedCode] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   // 生成されたコードをiframeで実行可能なBlob URLに変換
   useEffect(() => {
@@ -29,9 +29,6 @@ export default function EditorPage() {
 
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-    // デバッグログ
-    console.log("NAROU Engine Status: Checking API Key...");
-
     if (!apiKey) {
       alert("❌ APIキーが設定されていません。\n.env.localを確認し、サーバーを再起動してください。");
       return;
@@ -42,9 +39,9 @@ export default function EditorPage() {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // モデルIDは安定動作が確認されている gemini-2.5-flash を使用
+      // モデルIDは安定動作が確認されている gemini-2.0-flash を使用
       const model = genAI.getGenerativeModel(
-        { model: "gemini-2.5-flash" },
+        { model: "gemini-2.0-flash" },
         { apiVersion: "v1" }
       );
 
@@ -76,42 +73,8 @@ export default function EditorPage() {
     }
   };
 
-  // --- Supabaseへの保存処理 (NAROU GAME 規格適合版) ---
-  const handleSave = async () => {
-    if (!generatedCode) {
-      alert("保存するコードがありません。");
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // 修正：カラム名を正確に 'game_code' に指定
-      const { error } = await supabase
-        .from('games')
-        .insert([
-          { 
-            title: prompt.substring(0, 20) || "Untitled AI Game", 
-            game_code: generatedCode, // ← ここを gamecode から game_code に修正しました
-            prompt: prompt,
-            thumbnail: ""           // 既存データとの整合性のための空文字
-          }
-        ]);
-
-      if (error) {
-        console.error("Supabase Database Error:", error);
-        throw new Error(error.message);
-      }
-      
-      alert("🎉 NAROU GAME データベースへの保存に成功しました！");
-    } catch (error: any) {
-      alert(`保存エラー: ${error.message}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans tracking-tight text-slate-900 dark:text-white">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans tracking-tight text-slate-900 dark:text-white overflow-hidden">
       {/* ヘッダー */}
       <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-white/80 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
         <Link href="/" className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition text-[10px] font-black uppercase tracking-[0.2em]">
@@ -124,16 +87,16 @@ export default function EditorPage() {
           <button 
             onClick={handleGenerate}
             disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-[10px] font-black uppercase disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-blue-600/20"
+            className="bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white px-4 py-1.5 rounded text-[10px] font-black uppercase disabled:opacity-50 transition-all active:scale-95 border border-slate-200 dark:border-white/10"
           >
-            {isLoading ? 'Generating...' : 'AI生成'}
+            {isLoading ? 'Generating...' : 'AI再生成'}
           </button>
           <button 
-            onClick={handleSave}
-            disabled={isSaving || !generatedCode}
-            className="border border-slate-200 dark:border-white/10 px-4 py-1.5 rounded text-[10px] font-black uppercase hover:bg-slate-50 dark:hover:bg-white/5 transition-all disabled:opacity-30"
+            onClick={() => setShowPublishModal(true)}
+            disabled={isLoading || !generatedCode}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-1.5 rounded text-[10px] font-black uppercase disabled:opacity-30 transition-all active:scale-95 shadow-lg shadow-blue-600/20"
           >
-            {isSaving ? 'Saving...' : '保存'}
+            次へ進む →
           </button>
         </div>
       </header>
@@ -141,7 +104,7 @@ export default function EditorPage() {
       {/* メインエリア */}
       <main className="flex h-[calc(100vh-60px)]">
         {/* 左側：入力とソースコード */}
-        <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto">
+        <section className="w-1/3 border-r border-slate-200 dark:border-white/10 p-6 space-y-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/20">
           <div className="space-y-2">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <span className="w-1 h-1 bg-blue-600 rounded-full"></span> AI Prompt (UGC Strategy)
@@ -149,7 +112,7 @@ export default function EditorPage() {
             <textarea 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-32 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-white"
+              className="w-full h-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 dark:text-white shadow-inner"
               placeholder="例: パステルカラーのテトリス。消える時にエフェクトが欲しい。"
             />
           </div>
@@ -161,7 +124,7 @@ export default function EditorPage() {
             <textarea 
               value={generatedCode}
               onChange={(e) => setGeneratedCode(e.target.value)}
-              className="w-full h-[40vh] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none text-slate-900 dark:text-white"
+              className="w-full h-[45vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-[10px] focus:outline-none text-slate-900 dark:text-white shadow-inner"
               placeholder="生成されたコードがここに表示されます..."
             />
           </div>
@@ -172,7 +135,7 @@ export default function EditorPage() {
           {previewUrl ? (
             <iframe 
               src={previewUrl} 
-              className="w-full h-full border-none bg-white" 
+              className="w-full h-full border-none bg-white shadow-2xl" 
               sandbox="allow-scripts" 
               title="NAROU GAME Preview"
             />
@@ -186,6 +149,15 @@ export default function EditorPage() {
           )}
         </section>
       </main>
+
+      {/* パブリッシング・モーダル（確認画面） */}
+      {showPublishModal && (
+        <PublishModal 
+          code={generatedCode} 
+          initialPrompt={prompt} 
+          onClose={() => setShowPublishModal(false)} 
+        />
+      )}
     </div>
   );
 }
