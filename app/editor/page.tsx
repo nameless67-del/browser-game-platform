@@ -25,6 +25,7 @@ export default function EditorPage() {
 
   // --- 0. localStorageからデータの復元 ---
   useEffect(() => {
+    // クライアントサイドでのみ実行
     const savedCode = localStorage.getItem('narou_build_code');
     const savedPrompt = localStorage.getItem('narou_build_prompt');
 
@@ -44,7 +45,7 @@ export default function EditorPage() {
     });
   }, [router]);
 
-  // --- 1. AIサムネイル生成ロジック ---
+  // --- 1. AIサムネイル生成ロジック (30秒広告シミュレーション) ---
   const handleStartAiThumbnail = () => {
     setIsAdPlaying(true);
     setCountdown(30);
@@ -53,6 +54,8 @@ export default function EditorPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          // 実際にはここでGemini API経由でImagen等を叩く想定
+          // 今回はプロトタイプとしてランダムな画像URLをセット
           setThumbnailUrl(`https://picsum.photos/seed/${Math.random()}/400/500`);
           setIsAdPlaying(false);
           return 0;
@@ -98,6 +101,7 @@ export default function EditorPage() {
       router.push('/');
       router.refresh();
     } catch (err: any) {
+      console.error("Deploy Error:", err);
       alert(`デプロイエラー: ${err.message}`);
     } finally {
       setIsDeploying(false);
@@ -174,6 +178,7 @@ export default function EditorPage() {
             </label>
             
             <div className="grid grid-cols-2 gap-4">
+              {/* AI Option */}
               <button 
                 onClick={handleStartAiThumbnail}
                 disabled={isAdPlaying}
@@ -190,6 +195,7 @@ export default function EditorPage() {
                 )}
               </button>
 
+              {/* Manual Option */}
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 className="h-24 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center hover:border-slate-400 hover:bg-white/5 transition-all"
@@ -200,13 +206,14 @@ export default function EditorPage() {
               </button>
             </div>
 
+            {/* Preview Box */}
             <div className="aspect-[4/5] bg-slate-900 rounded-2xl border border-white/5 overflow-hidden relative group shadow-2xl">
               {thumbnailUrl ? (
                 <img src={thumbnailUrl} className="w-full h-full object-cover animate-in zoom-in-95 duration-500" alt="Preview" />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-slate-800 font-black italic">
-                  <div className="text-6xl -rotate-12 opacity-20 uppercase tracking-tighter">No<br/>Image</div>
-                  <div className="mt-4 text-[8px] font-black uppercase tracking-widest opacity-40">Asset Awaiting Initialization</div>
+                  <div className="text-6xl -rotate-12 opacity-20 uppercase tracking-tighter text-center">No<br/>Image</div>
+                  <div className="mt-4 text-[8px] font-black uppercase tracking-widest opacity-40 text-center">Asset Awaiting Initialization</div>
                 </div>
               )}
               {isAdPlaying && (
@@ -235,6 +242,11 @@ export default function EditorPage() {
               </>
             )}
           </button>
+          {!thumbnailUrl && (
+            <p className="text-center mt-4 text-[9px] font-bold text-pink-500/50 uppercase tracking-widest">
+              * サムネイルを生成またはアップロードしてください
+            </p>
+          )}
         </div>
       </div>
     </div>
