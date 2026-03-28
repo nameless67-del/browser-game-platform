@@ -1,34 +1,28 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function PostPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'folder' | 'code'>('folder');
   
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
     author: '',
-    play_time_avg: 0,
-    thumbnail_url: '',
     game_code: '', 
     genre: 'Action',
   });
 
-  // エクスプローラー起動：フォルダエリアをクリックした時のみ実行
   const handleFolderClick = () => {
     fileInputRef.current?.click();
   };
 
   const [previewUrl, setPreviewUrl] = useState<string>('');
 
-  // リアルタイムプレビュー：コードが変更されたら実行用のURLを生成
+  // リアルタイムプレビュー
   useEffect(() => {
     if (formData.game_code) {
       const blob = new Blob([formData.game_code], { type: 'text/html' });
@@ -38,34 +32,21 @@ export default function PostPage() {
     }
   }, [formData.game_code]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // --- 【重要】直接デプロイせず、Editorへデータを飛ばす ---
+  const handleProceedToEditor = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
 
-    try {
-      // Supabaseの新しい設計図に合わせてデータを挿入
-      const { error } = await supabase.from('games').insert([{
-        title: formData.title,
-        author: formData.author,
-        description: formData.description,
-        game_code: formData.game_code,
-        thumbnail_url: formData.thumbnail_url,
-        genre: formData.genre,
-        is_ai_generated: activeTab === 'code', // タブによってフラグを切り替え
-        revenue_weight: 1.0,  // 初期重み
-        engine_type: activeTab === 'code' ? 'html' : 'wasm' // 仕様書に基づいた分類
-      }]);
-
-      if (error) throw error;
-      
-      alert('デプロイ完了！収益分配対象として公開されました。');
-      router.push('/');
-      router.refresh();
-    } catch (error: any) {
-      alert('エラー: ' + error.message);
-    } finally {
-      setLoading(false);
+    if (!formData.game_code && activeTab === 'code') {
+      alert("コードを入力してください");
+      return;
     }
+
+    // localStorageに一時保存（Editorページがこれを読み取る）
+    localStorage.setItem('narou_build_code', formData.game_code);
+    localStorage.setItem('narou_build_prompt', `Manual Upload: ${formData.title}`); // 便宜上のプロンプト名
+    
+    // 公開設定ページへ遷移
+    router.push('/editor');
   };
 
   return (
@@ -75,9 +56,7 @@ export default function PostPage() {
           ← Exit
         </Link>
         <div className="text-[11px] font-black tracking-[0.4em] text-blue-600 dark:text-blue-500 uppercase italic">Rapid Deployment Console</div>
-        <button className="border border-blue-600/50 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white px-4 py-1.5 rounded text-[10px] font-black uppercase transition-all">
-          ゲームを作成・編集する
-        </button>
+        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Manual Entry Mode</div>
       </header>
 
       <main className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-0 h-[calc(100vh-60px)]">
@@ -99,21 +78,15 @@ export default function PostPage() {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleProceedToEditor} className="space-y-8">
             <div className="space-y-4">
               <input 
                 required
                 placeholder="タイトル" 
-                className="w-full bg-transparent border-b border-slate-200 dark:border-white/10 py-2 text-2xl font-black focus:outline-none focus:border-blue-600 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-800"
+                className="w-full bg-transparent border-b border-slate-200 dark:border-white/10 py-2 text-2xl font-black focus:outline-none focus:border-blue-600 transition-all"
                 value={formData.title}
                 onChange={(e) => setFormData({...formData, title: e.target.value})}
               />
-              <div className="flex gap-4">
-                <input required placeholder="AUTHOR" className="flex-1 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded px-3 py-2 text-xs font-bold focus:outline-none focus:border-blue-600 shadow-inner" value={formData.author} onChange={(e) => setFormData({...formData, author: e.target.value})} />
-                <select className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded px-3 py-2 text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none cursor-pointer" value={formData.genre} onChange={(e) => setFormData({...formData, genre: e.target.value})}>
-                  {['Action', 'Strategy', 'Puzzle', 'Shooting', 'RPG', 'Novel'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
-                </select>
-              </div>
             </div>
 
             {activeTab === 'folder' ? (
@@ -123,8 +96,8 @@ export default function PostPage() {
               >
                 <span className="text-3xl mb-3 group-hover/upload:scale-110 transition-transform">📁</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-center leading-relaxed">
-                  Drag & Drop Build Folder<br/>
-                  <span className="text-[8px] opacity-60">Unity / Godot / RPG Maker Web Build</span>
+                  Select Build Folder<br/>
+                  <span className="text-[8px] opacity-60">※現在はHTMLコード貼り付けのみ対応</span>
                 </span>
                 <input type="file" ref={fileInputRef} className="hidden" />
               </div>
@@ -133,30 +106,24 @@ export default function PostPage() {
                  <textarea 
                   required 
                   className="w-full h-80 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-lg p-4 font-mono text-xs focus:outline-none focus:border-blue-600/50 transition-all shadow-inner" 
-                  placeholder="Paste your AI-generated code here..." 
+                  placeholder="Paste your game code here..." 
                   value={formData.game_code} 
                   onChange={(e) => setFormData({...formData, game_code: e.target.value})} 
                 />
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white font-black py-4 rounded text-xs uppercase tracking-[0.3em] transition-all shadow-[0_10px_30px_rgba(37,99,235,0.2)] active:scale-[0.98]">
-              {loading ? 'Processing...' : 'Deploy & Start Earning'}
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded text-xs uppercase tracking-[0.3em] transition-all active:scale-[0.98]">
+              次へ進む (公開設定へ) →
             </button>
           </form>
         </section>
 
-        {/* プレビューエリア：仕様書の「10秒起動」を体現 */}
         <section className="bg-slate-50 dark:bg-black relative overflow-hidden flex items-center justify-center border-l border-slate-200 dark:border-transparent">
-          <div className="absolute top-4 left-4 z-10">
-            <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> Preview Output
-            </span>
-          </div>
           {previewUrl ? <iframe src={previewUrl} className="w-full h-full border-none bg-white" sandbox="allow-scripts" /> : (
             <div className="text-center space-y-4">
               <div className="text-4xl opacity-10 italic font-black text-slate-900 dark:text-white select-none">AIGP</div>
-              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Standby for Asset Verification</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Preview Standby</p>
             </div>
           )}
         </section>
